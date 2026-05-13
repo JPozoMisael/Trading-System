@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>XAUUSD Analysis Engine</title>
+
+    <style>
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+
+            background: #0f172a;
+
+            font-family: Arial, sans-serif;
+
+            overflow: hidden;
+        }
+
+        .topbar {
+
+            position: absolute;
+
+            top: 20px;
+
+            left: 20px;
+
+            z-index: 999;
+
+            background: rgba(15, 23, 42, 0.95);
+
+            padding: 18px;
+
+            border-radius: 14px;
+
+            border: 1px solid #334155;
+
+            color: white;
+
+            min-width: 320px;
+        }
+
+        .topbar h2 {
+
+            color: #38bdf8;
+
+            margin-bottom: 10px;
+        }
+
+        .price {
+
+            font-size: 24px;
+
+            font-weight: bold;
+
+            margin-bottom: 12px;
+        }
+
+        .badges {
+
+            display: flex;
+
+            gap: 10px;
+        }
+
+        .badge {
+
+            padding: 8px 12px;
+
+            border-radius: 10px;
+
+            font-size: 13px;
+
+            font-weight: bold;
+        }
+
+        .bullish {
+            background: #16a34a;
+        }
+
+        .bearish {
+            background: #dc2626;
+        }
+
+        .wait {
+            background: #475569;
+        }
+
+        #tvchart {
+
+            width: 100vw;
+
+            height: 100vh;
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+    <div class="topbar">
+
+        <h2>XAUUSD Analysis Engine</h2>
+
+        <div id="price" class="price">
+            Loading...
+        </div>
+
+        <div class="badges">
+
+            <div id="trendBadge" class="badge wait">
+                Trend
+            </div>
+
+            <div id="signalBadge" class="badge wait">
+                Signal
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- TradingView Widget -->
+    <div id="tvchart"></div>
+
+    <script src="https://s3.tradingview.com/tv.js"></script>
+
+    <script>
+
+        async function loadAnalysis() {
+
+            const response = await fetch('/analyze/xauusd');
+
+            const analysis = await response.json();
+
+            // Price
+            document.getElementById('price').innerHTML =
+                `Current Price: ${analysis.current_price}`;
+
+            // Trend
+            const trendBadge = document.getElementById('trendBadge');
+
+            trendBadge.innerHTML = analysis.market_state;
+
+            trendBadge.className =
+                `badge ${analysis.market_state.toLowerCase()}`;
+
+            // Signal
+            const signalBadge = document.getElementById('signalBadge');
+
+            signalBadge.innerHTML = analysis.signal;
+
+            if (analysis.signal === 'BUY') {
+
+                signalBadge.className = 'badge bullish';
+
+            } else if (analysis.signal === 'SELL') {
+
+                signalBadge.className = 'badge bearish';
+
+            } else {
+
+                signalBadge.className = 'badge wait';
+            }
+        }
+
+        new TradingView.widget({
+
+            autosize: true,
+
+            symbol: "OANDA:XAUUSD",
+
+            interval: "15",
+
+            timezone: "Etc/UTC",
+
+            theme: "dark",
+
+            style: "1",
+
+            locale: "en",
+
+            toolbar_bg: "#0f172a",
+
+            enable_publishing: false,
+
+            hide_top_toolbar: false,
+
+            allow_symbol_change: true,
+
+            container_id: "tvchart"
+        });
+
+        loadAnalysis();
+
+    </script>
+
+</body>
+
+</html>
