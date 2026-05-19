@@ -1,6 +1,9 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
+
+import time
 
 from app.services.market_service import (
     get_market_data,
@@ -12,12 +15,56 @@ from app.services.market_service import (
     calculate_score,
     detect_bos,
     detect_engulfing,
-    calculate_trade_levels
+    detect_liquidity_sweep,
+    calculate_trade_levels,
+    detect_session,
 )
 
-app = FastAPI()
+app = FastAPI(title="XAUUSD Analysis Engine", version="2.0.0")
 
 templates = Jinja2Templates(directory="templates")
+
+# =========================================
+# CORS — necesario para el chart en browser
+# =========================================
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# =========================================
+# CACHÉ EN MEMORIA (TTL = 60 segundos)
+# =========================================
+
+_cache: dict = {}
+CACHE_TTL = 60  # segundos
+
+
+def get_cached(key: str):
+    entry = _cache.get(key)
+    if entry and (time.time() - entry["ts"]) < CACHE_TTL:
+        return entry["data"]
+    return None
+
+
+def set_cached(key: str, data):
+    _cache[key] = {"data": data, "ts": time.time()}
+
+
+# =========================================
+# ERROR HANDLER GLOBAL
+# =========================================
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"error": "Internal server error", "detail": str(exc)},
+    )
 
 
 # =========================================
@@ -26,10 +73,15 @@ templates = Jinja2Templates(directory="templates")
 
 @app.get("/")
 def root():
-
     return {
-        "status": "ok",
-        "service": "analysis-engine"
+        "status":  "ok",
+        "service": "XAUUSD Analysis Engine",
+        "version": "2.0.0",
+        "endpoints": [
+            "/analyze/xauusd",
+            "/market-data/xauusd",
+            "/chart",
+        ]
     }
 
 
@@ -40,152 +92,107 @@ def root():
 @app.get("/analyze/xauusd")
 def analyze_xauusd():
 
-    # =====================================
-    # BUILD CONTEXT
-    # =====================================
+    # Intentar desde caché primero
+    cached = get_cached("analysis")
+    if cached:
+        return {**cached, "cached": True}
 
     context = build_market_context()
 
-    # =====================================
-    # TREND
-    # =====================================
+    if context is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Market data unavailable. Market may be closed or API is down."
+        )
 
-    trend = detect_trend(context)
-
-    # =====================================
-    # MARKET STRUCTURE
-    # =====================================
-
-    swings = detect_swings(context)
-
-    # =====================================
-    # FIBONACCI
-    # =====================================
-
-    fib_levels = calculate_fibonacci(context)
-
-    # =====================================
-    # SIGNAL ENGINE
-    # =====================================
-
-    signal_data = generate_signal(context)
-
-    # =====================================
-    # CONFIDENCE ENGINE
-    # =====================================
-
-    score_data = calculate_score(context)
-
-    # =====================================
-    # BREAK OF STRUCTURE
-    # =====================================
-
-    bos = detect_bos(context)
-
-    # =====================================
-    # CANDLESTICK PATTERNS
-    # =====================================
-
-    engulfing = detect_engulfing(context)
-
-    # =====================================
-    # TRADE LEVELS
-    # =====================================
-
+    trend        = detect_trend(context)
+    swings       = detect_swings(context)
+    fib_levels   = calculate_fibonacci(context)
+    signal_data  = generate_signal(context)
+    score_data   = calculate_score(context)
+    bos          = detect_bos(context)
+    engulfing    = detect_engulfing(context)
+    sweep        = detect_liquidity_sweep(context)
     trade_levels = calculate_trade_levels(context)
+    session      = detect_session()
 
-    # =====================================
-    # RESPONSE
-    # =====================================
+    response = {
+        "symbol":        "XAUUSD",
+        "timeframe":     "M15",
+        "session":       session,
 
-    return {
+        # Market context
+        "market_state":  trend,
+        "ema20":         context["ema20"],
+        "ema50":         context["ema50"],
+        "atr":           context["atr"],
+        "rsi":           context["rsi"],
 
-        "symbol": "XAUUSD",
+        # Structure
+        "swing_high":    swings["swing_high"],
+        "swing_low":     swings["swing_low"],
 
-        "timeframe": "M15",
+        # Fibonacci
+        "fibonacci":     fib_levels,
 
-        # =================================
-        # MARKET CONTEXT
-        # =================================
-
-        "market_state": trend,
-
-        # =================================
-        # STRUCTURE
-        # =================================
-
-        "swing_high": swings["swing_high"],
-
-        "swing_low": swings["swing_low"],
-
-        # =================================
-        # FIBONACCI
-        # =================================
-
-        "fibonacci": fib_levels,
-
-        # =================================
-        # SIGNAL
-        # =================================
-
-        "signal": signal_data["signal"],
-
+        # Signal
+        "signal":        signal_data["signal"],
+        "reasons":       signal_data["reasons"],
         "current_price": signal_data["current_price"],
 
-        # =================================
-        # CONFIDENCE
-        # =================================
+        # Confidence
+        "score":         score_data["score"],
+        "confidence":    score_data["confidence"],
 
-        "score": score_data["score"],
+        # Confirmations
+        "bos":           bos,
+        "engulfing":     engulfing,
+        "sweep":         sweep,
 
-        "confidence": score_data["confidence"],
+        # Trade levels
+        "entry":         trade_levels["entry"],
+        "sl":            trade_levels["sl"],
+        "tp":            trade_levels["tp"],
 
-        # =================================
-        # CONFIRMATION
-        # =================================
-
-        "bos": bos,
-
-        "engulfing": engulfing,
-
-        # =================================
-        # TRADE LEVELS
-        # =================================
-
-        "entry": trade_levels["entry"],
-
-        "sl": trade_levels["sl"],
-
-        "tp": trade_levels["tp"]
+        "cached":        False,
     }
+
+    set_cached("analysis", response)
+    return response
 
 
 # =========================================
-# MARKET DATA
+# MARKET DATA (para gráfico de velas)
 # =========================================
 
 @app.get("/market-data/xauusd")
 def market_data():
 
+    cached = get_cached("candles")
+    if cached:
+        return cached
+
     data = get_market_data()
 
+    if data is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Market data unavailable."
+        )
+
     candles = []
-
     for index, row in data.iterrows():
-
+        # timestamp Unix en segundos — requerido por lightweight-charts
+        ts = int(index.timestamp())
         candles.append({
-
-            "time": index.strftime("%Y-%m-%d"),
-
-            "open": float(round(row["Open"], 2)),
-
-            "high": float(round(row["High"], 2)),
-
-            "low": float(round(row["Low"], 2)),
-
-            "close": float(round(row["Close"], 2))
+            "time":  ts,
+            "open":  float(round(row["Open"],  2)),
+            "high":  float(round(row["High"],  2)),
+            "low":   float(round(row["Low"],   2)),
+            "close": float(round(row["Close"], 2)),
         })
 
+    set_cached("candles", candles)
     return candles
 
 
@@ -195,10 +202,7 @@ def market_data():
 
 @app.get("/chart", response_class=HTMLResponse)
 def chart(request: Request):
-
     return templates.TemplateResponse(
-        "chart.html",
-        {
-            "request": request
-        }
+        request=request,
+        name="chart.html",
     )

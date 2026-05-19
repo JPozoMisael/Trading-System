@@ -1,210 +1,467 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>XAUUSD Analysis Engine</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    <meta charset="UTF-8">
+    body {
+      background: #0f172a;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      color: #e2e8f0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
 
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    /* ── TOP BAR ── */
+    #topbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+      flex-wrap: wrap;
+      z-index: 10;
+    }
 
-    <title>XAUUSD Analysis Engine</title>
+    #topbar h1 {
+      font-size: 15px;
+      color: #38bdf8;
+      white-space: nowrap;
+    }
 
-    <style>
+    .price-box {
+      font-size: 22px;
+      font-weight: 700;
+      color: #f8fafc;
+    }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+    .badge {
+      padding: 5px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .badge.bullish  { background: #16a34a; }
+    .badge.bearish  { background: #dc2626; }
+    .badge.wait     { background: #475569; }
+    .badge.overlap  { background: #7c3aed; }
+    .badge.london   { background: #0284c7; }
+    .badge.newyork  { background: #0369a1; }
+    .badge.asia     { background: #0e7490; }
+    .badge.dead     { background: #374151; }
 
-        body {
+    .confidence-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #94a3b8;
+    }
+    .confidence-bar .bar {
+      width: 80px;
+      height: 8px;
+      background: #334155;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .confidence-bar .fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.6s ease;
+      background: linear-gradient(90deg, #16a34a, #38bdf8);
+    }
 
-            background: #0f172a;
+    .refresh-info {
+      margin-left: auto;
+      font-size: 11px;
+      color: #475569;
+      white-space: nowrap;
+    }
 
-            font-family: Arial, sans-serif;
+    /* ── MAIN LAYOUT ── */
+    #main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
 
-            overflow: hidden;
-        }
+    /* ── SIDEBAR ── */
+    #sidebar {
+      width: 240px;
+      min-width: 240px;
+      background: #1e293b;
+      border-right: 1px solid #334155;
+      padding: 12px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
 
-        .topbar {
+    .card {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
 
-            position: absolute;
+    .card h3 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748b;
+      margin-bottom: 8px;
+    }
 
-            top: 20px;
+    .card .row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      padding: 3px 0;
+      border-bottom: 1px solid #1e293b;
+    }
+    .card .row:last-child { border-bottom: none; }
+    .card .row .label { color: #94a3b8; }
+    .card .row .value { font-weight: 600; color: #e2e8f0; }
+    .card .row .value.green  { color: #4ade80; }
+    .card .row .value.red    { color: #f87171; }
+    .card .row .value.yellow { color: #fbbf24; }
+    .card .row .value.blue   { color: #38bdf8; }
 
-            left: 20px;
+    .fib-level {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      padding: 2px 0;
+    }
+    .fib-level .fib-label { color: #64748b; }
+    .fib-level .fib-value { color: #cbd5e1; font-family: monospace; }
+    .fib-level.ote .fib-label { color: #fbbf24; font-weight: 700; }
+    .fib-level.ote .fib-value { color: #fbbf24; font-weight: 700; }
 
-            z-index: 999;
+    .reasons {
+      font-size: 11px;
+      color: #94a3b8;
+      line-height: 1.6;
+    }
+    .reasons span {
+      display: block;
+      padding: 1px 0;
+    }
 
-            background: rgba(15, 23, 42, 0.95);
+    /* ── CHART ── */
+    #chart-wrapper {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
 
-            padding: 18px;
+    #tvchart {
+      width: 100%;
+      height: 100%;
+    }
 
-            border-radius: 14px;
+    /* ── TRADE BOX (overlay bottom-right) ── */
+    #tradebox {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 14px 18px;
+      min-width: 200px;
+      z-index: 5;
+    }
 
-            border: 1px solid #334155;
+    #tradebox h3 {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: #64748b;
+      margin-bottom: 8px;
+      letter-spacing: 0.08em;
+    }
 
-            color: white;
+    #tradebox .trow {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      padding: 3px 0;
+    }
+    #tradebox .trow .tl { color: #94a3b8; }
+    #tradebox .trow .tv { font-weight: 700; }
+    #tradebox .trow .tv.entry  { color: #38bdf8; }
+    #tradebox .trow .tv.sl     { color: #f87171; }
+    #tradebox .trow .tv.tp     { color: #4ade80; }
 
-            min-width: 320px;
-        }
+    /* ── LOADING / ERROR ── */
+    #overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+      font-size: 14px;
+      color: #94a3b8;
+    }
+    #overlay.hidden { display: none; }
 
-        .topbar h2 {
-
-            color: #38bdf8;
-
-            margin-bottom: 10px;
-        }
-
-        .price {
-
-            font-size: 24px;
-
-            font-weight: bold;
-
-            margin-bottom: 12px;
-        }
-
-        .badges {
-
-            display: flex;
-
-            gap: 10px;
-        }
-
-        .badge {
-
-            padding: 8px 12px;
-
-            border-radius: 10px;
-
-            font-size: 13px;
-
-            font-weight: bold;
-        }
-
-        .bullish {
-            background: #16a34a;
-        }
-
-        .bearish {
-            background: #dc2626;
-        }
-
-        .wait {
-            background: #475569;
-        }
-
-        #tvchart {
-
-            width: 100vw;
-
-            height: 100vh;
-        }
-
-    </style>
-
+    /* scrollbar sidebar */
+    #sidebar::-webkit-scrollbar { width: 4px; }
+    #sidebar::-webkit-scrollbar-track { background: transparent; }
+    #sidebar::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+  </style>
 </head>
-
 <body>
 
-    <div class="topbar">
+<!-- ── TOP BAR ── -->
+<div id="topbar">
+  <h1>⚡ XAUUSD Analysis Engine</h1>
+  <div class="price-box" id="priceBox">—</div>
+  <div class="badge wait" id="trendBadge">Trend</div>
+  <div class="badge wait" id="signalBadge">Signal</div>
+  <div class="badge dead" id="sessionBadge">Session</div>
+  <div class="confidence-bar">
+    <span id="confLabel">0%</span>
+    <div class="bar"><div class="fill" id="confFill" style="width:0%"></div></div>
+  </div>
+  <div class="refresh-info" id="refreshInfo">Updating...</div>
+</div>
 
-        <h2>XAUUSD Analysis Engine</h2>
+<!-- ── MAIN ── -->
+<div id="main">
 
-        <div id="price" class="price">
-            Loading...
-        </div>
+  <!-- SIDEBAR -->
+  <div id="sidebar">
 
-        <div class="badges">
-
-            <div id="trendBadge" class="badge wait">
-                Trend
-            </div>
-
-            <div id="signalBadge" class="badge wait">
-                Signal
-            </div>
-
-        </div>
-
+    <!-- Indicators -->
+    <div class="card">
+      <h3>Indicators</h3>
+      <div class="row"><span class="label">EMA 20</span><span class="value blue" id="ema20">—</span></div>
+      <div class="row"><span class="label">EMA 50</span><span class="value blue" id="ema50">—</span></div>
+      <div class="row"><span class="label">RSI 14</span><span class="value" id="rsi">—</span></div>
+      <div class="row"><span class="label">ATR 14</span><span class="value" id="atr">—</span></div>
     </div>
 
-    <!-- TradingView Widget -->
+    <!-- Structure -->
+    <div class="card">
+      <h3>Market Structure</h3>
+      <div class="row"><span class="label">Swing High</span><span class="value green" id="swingHigh">—</span></div>
+      <div class="row"><span class="label">Swing Low</span><span class="value red"   id="swingLow">—</span></div>
+      <div class="row"><span class="label">BOS</span><span class="value" id="bos">—</span></div>
+      <div class="row"><span class="label">Engulfing</span><span class="value" id="engulfing">—</span></div>
+      <div class="row"><span class="label">Liq. Sweep</span><span class="value" id="sweep">—</span></div>
+    </div>
+
+    <!-- Fibonacci -->
+    <div class="card">
+      <h3>Fibonacci OTE</h3>
+      <div id="fibLevels"></div>
+    </div>
+
+    <!-- Reasons -->
+    <div class="card">
+      <h3>Signal Reasons</h3>
+      <div class="reasons" id="reasons">—</div>
+    </div>
+
+  </div>
+
+  <!-- CHART -->
+  <div id="chart-wrapper">
     <div id="tvchart"></div>
 
-    <script src="https://s3.tradingview.com/tv.js"></script>
+    <!-- Trade Levels overlay -->
+    <div id="tradebox">
+      <h3>Trade Setup</h3>
+      <div class="trow"><span class="tl">Entry</span> <span class="tv entry" id="tbEntry">—</span></div>
+      <div class="trow"><span class="tl">Stop Loss</span><span class="tv sl"    id="tbSL">—</span></div>
+      <div class="trow"><span class="tl">Take Profit</span><span class="tv tp"  id="tbTP">—</span></div>
+    </div>
 
-    <script>
+    <div id="overlay">Loading market data...</div>
+  </div>
 
-        async function loadAnalysis() {
+</div>
 
-            const response = await fetch('/analyze/xauusd');
+<!-- TradingView -->
+<script src="https://s3.tradingview.com/tv.js"></script>
+<script>
+  // ── TradingView Widget ──────────────────────────────────────────────────────
+  new TradingView.widget({
+    autosize:           true,
+    symbol:             "OANDA:XAUUSD",
+    interval:           "15",
+    timezone:           "Etc/UTC",
+    theme:              "dark",
+    style:              "1",
+    locale:             "en",
+    toolbar_bg:         "#1e293b",
+    enable_publishing:  false,
+    hide_top_toolbar:   false,
+    allow_symbol_change: false,
+    studies:            ["RSI@tv-basicstudies", "MAExp@tv-basicstudies"],
+    container_id:       "tvchart",
+  });
 
-            const analysis = await response.json();
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+  function $id(id) { return document.getElementById(id); }
 
-            // Price
-            document.getElementById('price').innerHTML =
-                `Current Price: ${analysis.current_price}`;
+  function signalClass(val) {
+    if (!val || val === 'NONE' || val === 'WAIT') return '';
+    return val === 'BULLISH' || val === 'BUY' ? 'green' : 'red';
+  }
 
-            // Trend
-            const trendBadge = document.getElementById('trendBadge');
+  function sessionClass(session) {
+    const map = {
+      LONDON_NY_OVERLAP: 'overlap',
+      LONDON:            'london',
+      NEW_YORK:          'newyork',
+      ASIA:              'asia',
+      DEAD_ZONE:         'dead',
+    };
+    return map[session] || 'dead';
+  }
 
-            trendBadge.innerHTML = analysis.market_state;
+  function sessionLabel(session) {
+    const map = {
+      LONDON_NY_OVERLAP: '🔥 London+NY',
+      LONDON:            '🇬🇧 London',
+      NEW_YORK:          '🗽 New York',
+      ASIA:              '🌏 Asia',
+      DEAD_ZONE:         '💤 Dead Zone',
+    };
+    return map[session] || session;
+  }
 
-            trendBadge.className =
-                `badge ${analysis.market_state.toLowerCase()}`;
+  // ── Render Fibonacci ────────────────────────────────────────────────────────
+  function renderFib(fib) {
+    const container = $id('fibLevels');
+    if (!fib || Object.keys(fib).length === 0) {
+      container.innerHTML = '<span style="color:#475569;font-size:11px">No data</span>';
+      return;
+    }
 
-            // Signal
-            const signalBadge = document.getElementById('signalBadge');
+    const oteKeys = ['0.618', '0.786'];
+    container.innerHTML = Object.entries(fib).map(([key, val]) => {
+      const isOte = oteKeys.includes(key);
+      return `<div class="fib-level ${isOte ? 'ote' : ''}">
+        <span class="fib-label">Fib ${key}</span>
+        <span class="fib-value">${val}</span>
+      </div>`;
+    }).join('');
+  }
 
-            signalBadge.innerHTML = analysis.signal;
+  // ── Update UI ───────────────────────────────────────────────────────────────
+  function updateUI(a) {
+    // Price
+    $id('priceBox').textContent = a.current_price ?? '—';
 
-            if (analysis.signal === 'BUY') {
+    // Trend badge
+    const tb = $id('trendBadge');
+    tb.textContent  = a.market_state ?? '—';
+    tb.className    = `badge ${(a.market_state || '').toLowerCase()}`;
 
-                signalBadge.className = 'badge bullish';
+    // Signal badge
+    const sb = $id('signalBadge');
+    sb.textContent  = a.signal ?? 'WAIT';
+    sb.className    = `badge ${a.signal === 'BUY' ? 'bullish' : a.signal === 'SELL' ? 'bearish' : 'wait'}`;
 
-            } else if (analysis.signal === 'SELL') {
+    // Session badge
+    const sess = $id('sessionBadge');
+    sess.textContent = sessionLabel(a.session);
+    sess.className   = `badge ${sessionClass(a.session)}`;
 
-                signalBadge.className = 'badge bearish';
+    // Confidence bar
+    const conf = a.confidence ?? 0;
+    $id('confLabel').textContent = `${conf}%`;
+    $id('confFill').style.width  = `${conf}%`;
 
-            } else {
+    // Indicators
+    $id('ema20').textContent = a.ema20 ?? '—';
+    $id('ema50').textContent = a.ema50 ?? '—';
 
-                signalBadge.className = 'badge wait';
-            }
-        }
+    const rsiEl = $id('rsi');
+    rsiEl.textContent = a.rsi ?? '—';
+    rsiEl.className   = `value ${a.rsi > 70 ? 'red' : a.rsi < 30 ? 'green' : 'yellow'}`;
 
-        new TradingView.widget({
+    $id('atr').textContent = a.atr ?? '—';
 
-            autosize: true,
+    // Structure
+    $id('swingHigh').textContent = a.swing_high ?? '—';
+    $id('swingLow').textContent  = a.swing_low  ?? '—';
 
-            symbol: "OANDA:XAUUSD",
+    const bosEl = $id('bos');
+    bosEl.textContent = a.bos ?? 'NONE';
+    bosEl.className   = `value ${signalClass(a.bos)}`;
 
-            interval: "15",
+    const engEl = $id('engulfing');
+    engEl.textContent = a.engulfing ?? 'NONE';
+    engEl.className   = `value ${signalClass(a.engulfing)}`;
 
-            timezone: "Etc/UTC",
+    const sweepEl = $id('sweep');
+    sweepEl.textContent = a.sweep ?? 'NONE';
+    sweepEl.className   = `value ${signalClass(a.sweep)}`;
 
-            theme: "dark",
+    // Fibonacci
+    renderFib(a.fibonacci);
 
-            style: "1",
+    // Reasons
+    const reasons = a.reasons ?? [];
+    $id('reasons').innerHTML = reasons.length
+      ? reasons.map(r => `<span>• ${r}</span>`).join('')
+      : '<span>—</span>';
 
-            locale: "en",
+    // Trade levels
+    $id('tbEntry').textContent = a.entry ?? '—';
+    $id('tbSL').textContent    = a.sl    ?? '—';
+    $id('tbTP').textContent    = a.tp    ?? '—';
+  }
 
-            toolbar_bg: "#0f172a",
+  // ── Fetch & Refresh ─────────────────────────────────────────────────────────
+  let refreshInterval = null;
 
-            enable_publishing: false,
+  async function loadAnalysis() {
+    try {
+      const res = await fetch('/analyze/xauusd');
 
-            hide_top_toolbar: false,
+      if (!res.ok) {
+        const err = await res.json();
+        $id('overlay').textContent = `⚠️ ${err.detail ?? 'Market unavailable'}`;
+        $id('overlay').classList.remove('hidden');
+        return;
+      }
 
-            allow_symbol_change: true,
+      const data = await res.json();
+      updateUI(data);
 
-            container_id: "tvchart"
-        });
+      $id('overlay').classList.add('hidden');
 
-        loadAnalysis();
+      const now = new Date().toLocaleTimeString();
+      const cached = data.cached ? ' (cached)' : '';
+      $id('refreshInfo').textContent = `Last update: ${now}${cached}`;
 
-    </script>
+    } catch (e) {
+      $id('overlay').textContent = `⚠️ Connection error: ${e.message}`;
+      $id('overlay').classList.remove('hidden');
+    }
+  }
 
+  // Primera carga
+  loadAnalysis();
+
+  // Auto-refresh cada 60 segundos (alineado con TTL del caché)
+  refreshInterval = setInterval(loadAnalysis, 60_000);
+</script>
 </body>
-
 </html>
